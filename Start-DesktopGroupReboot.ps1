@@ -1,14 +1,21 @@
 <#
 .Synopsis
-   Reboots machines in desktop group by placing them into maintenance in predefined bacthes.
+   Reboots machines in desktop delivery group by placing them into maintenance in predefined bacthes.
 .DESCRIPTION
-   The script reboots all machines in a given desktop delivery group. This is done by placing a user defined number of
-   machines into maintenance, waiting for sessions to logoff and rebooting machines. Once the batch is verfied, the script
-   moves to the next batch. The parameters available are DesktopGroupName, PercentToRemain (percentage of machines in the desktop group
-   to reamin available), Retryinterval (how often in seconds the script checks for sessions on the given batch), WaitForRegisterInterval (expected
-   reboot and registration timeout - if lapses script errors), and MaxRecords (number of machine objects in site, required by powershell.
-   Default is 10000, increase if you have more).
+   The script reboots all machines in a given desktop delivery group while the system is in use. This is done by placing a user defined number of machines into maintenance, waiting for sessions to logoff and rebooting machines. Once the batch is verfied, the script moves to the next batch.
    The script is meant to run on the Delivery Controller.
+
+.PARAMETER DesktopGroupName
+    The name of the Desktop Delivery Group. This parameter is mandatory.
+.PARAMETER PercentToRemain
+    Percent of machines to remain available. This does not apply to machines with zero sessions. This parameter is mandatory.
+.PARAMETER RetryInterval
+    The interval in seconds when the script checks for sessions on the given batch. Default is 120 seconds.
+.PARAMETER WaitForRegisterInterval
+    Expected reboot and registration timeout. If lapses the script throws an error. Default is 120 seconds
+.PARAMETER MaxRecords
+    This is a Powershell MaxRecordCount parameter needed to query machine objects. Default is 10,000. Specify if the environment has more the 10,000 machines.
+
 .EXAMPLE
     .\start-desktopgroupreboot.ps1 -DesktopGroupName "My Desktops" -PercentToRemain 80 -WaitForRegisterInterval 180
 .NOTES
@@ -99,7 +106,7 @@ else {
 
 
 #Cycle through remaining machines in specified batches
-while ($allmachines -gt 0) {
+while ($allmachines.count -gt 0) {
     #subtract the placeinmaintenancecount from remaining machines
     $newremainingmachines = $allmachines | Select-Object -first $placeinmaintcount
     #put in maintenance and reboot
