@@ -33,13 +33,12 @@
 
 Param (
     #Name of Desktop Delivery Group
-    [Parameter(Mandatory = $true)]
     $DesktopGroupName,
     #Percent of machines in Desktop Delivery Group to remain available
     [Parameter(Mandatory = $true)]
     [int]$PercentToRemain,
     #Delivery Controller FQDN
-    $AdminAddress,
+    $AdminAddress = "oit-adi-ddc12a.ad.umn.edu",
     #Time it takes for machines to reboot and register
     [int]$WaitForRegisterInterval = 120,
     #Retry interval seconds between session count checks
@@ -61,6 +60,19 @@ if ([string]::IsNullOrEmpty($adminaddress)) {
     exit
 }
 
+#Verify Desktop Group
+if ([string]::IsNullOrEmpty($DesktopGroupName) -or (!(Get-BrokerDesktopGroup -Name $DesktopGroupName -ErrorAction SilentlyContinue))) {
+    write-host "Desktop Group name is not specified or does not exist. Please select the Desktop Group." -ForegroundColor Yellow
+    $DesktopGroups = Get-BrokerDesktopGroup
+
+    For ($i = 0; $i -lt $DesktopGroups.Count; $i++) {
+        Write-Host "$($i+1): $($DesktopGroups[$i].Name)"
+    }
+
+    [int]$number = Read-Host "Press the number to select store"
+    $DesktopGroupName = $DesktopGroups[$number - 1].Name
+}
+
 
 #Functions
 
@@ -72,9 +84,9 @@ function Wait-RebootMaintenance ($AdminAddress, $DesktopGroupName, $machines, $r
     while ($machines.count -gt 0) {
         write-host $machines.count "machines remaining. machines are `n$machines `n" -ForegroundColor Yellow
         #logoff disconnected sessions
-        if ($LogoffDisconnected -eq "True" -and (Get-BrokerSession | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" })) {
+        if ($LogoffDisconnected -eq "True" -and (Get-BrokerSession | where { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" })) {
             Write-Host "Logging off disconnected sessions" -ForegroundColor Yellow
-            Get-BrokerSession -AdminAddress $AdminAddress | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" } | Stop-BrokerSession
+            Get-BrokerSession -AdminAddress $AdminAddress | where { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" } | Stop-BrokerSession
             start-sleep $DisconnectWait
         }
         #for each machine check if session count is less then one
@@ -109,9 +121,9 @@ function Wait-RebootMaintenance ($AdminAddress, $DesktopGroupName, $machines, $r
 write-host "`nBatches of $placeinmaintcount machines will be placed in maintenance at one time `n" -ForegroundColor Yellow
 
 #logoff disconnected sessions
-if ($LogoffDisconnected -eq "True" -and (Get-BrokerSession -AdminAddress $AdminAddress | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" })) {
+if ($LogoffDisconnected -eq "True" -and (Get-BrokerSession -AdminAddress $AdminAddress | where { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" })) {
     Write-Host "Logging off disconnected sessions" -ForegroundColor Yellow
-    Get-BrokerSession -AdminAddress $AdminAddress | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" } | Stop-BrokerSession
+    Get-BrokerSession -AdminAddress $AdminAddress | where { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" } | Stop-BrokerSession
     Start-Sleep $DisconnectWait
 }
 #get machines with zero sessions first and reboot
