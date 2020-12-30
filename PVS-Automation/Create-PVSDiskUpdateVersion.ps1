@@ -3,10 +3,11 @@
    This script creates PVS disk maintenance version.
 .DESCRIPTION
    This script creates maintenance version of a PVS disk and boots dedicated image build machine returning the IP address of that VM.
-   Configuration XML file - InteractivePVSConfig.xml is required for this automation to work. Please specify the file path below the Param block.
+   Configuration XML file - InteractivePVSConfig.xml is required for this automation to work. Please specify the file path in the Param block under configpath or during execution.
+   If the XML path is not specified at that time, the script will attempt to use InteractivePVSConfig.xml file in the same location as the script.
    The script can be ran interactively without parameters.
 .EXAMPLE
-    .\Create-PVSDiskUpdateVersion.ps1 -pvsStoreName "MyStore" -pvsDiskName "myDisk2020" -updatemachine myUpdatemachine
+    .\Create-PVSDiskUpdateVersion.ps1 -pvsStoreName "MyStore" -pvsDiskName "myDisk2020" -updatemachine myUpdatemachine -configpath "c:\automation\InteractivePVSConfig.xml"
 .NOTES
     Author: Dmitry Palchuk
     Creation Date:  12/2020
@@ -15,11 +16,24 @@
 Param (
     $pvsstorename,
     $pvsdiskname,
-    $updatemachine
+    $updatemachine,
+    $configpath
 )
 
 #Configuration File Path
-[xml]$ConfigFile = Get-Content "C:\automation\InteractivePVSConfig.xml"
+#use the same path as the script if config is not specified
+if ([string]::IsNullOrEmpty($configpath)) {
+    #determine script location
+    $myDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $ScriptName = $MyInvocation.MyCommand.Name
+
+    #determine xml file name and location
+    $xmlName = [io.path]::GetFileNameWithoutExtension($ScriptName)
+    [xml]$ConfigFile = Get-Content "$myDir\InteractivePVSConfig.xml"
+}
+else {
+    [xml]$ConfigFile = Get-Content $configpath
+}
 
 #vars
 $RemovePVS = $ConfigFile.Settings.BaseSettings.RemotePVS
@@ -84,8 +98,7 @@ else {
 $updateVersions = Citrix.PVS.SnapIn\Get-PvsDiskVersion -DiskLocatorId $disklocator.disklocatorid.Guid
 foreach ($updateversion in $updateversions) {
     if ($updateversion.Access -eq 1 -or $updateversion.Access -eq 2) {
-        Write-Host "Maintenance or Test Version of $($disklocator.name) exists. It may need to be promoted or deleted. It is assigned to $($updatevm.name). Check disk versions under $storename store." -ForegroundColor Red
-        Exit
+        Throw "Maintenance or Test Version of $($disklocator.name) exists. It may need to be promoted or deleted. It is assigned to $($updatevm.name). Check disk versions under $storename store."
 
     }
 }
@@ -96,24 +109,21 @@ foreach ($updateversion in $updateversions) {
 if ([string]::IsNullOrEmpty($updatemachine) -and (![string]::IsNullOrEmpty($UpdateCollection)) ) {
     $updatevm = Citrix.PVS.SnapIn\Get-PvsDeviceInfo | Where-Object { $_.DiskLocatorName -eq $($($disklocator.StoreName) + "\" + $($disklocator.DiskLocatorName)) -and $_.Type -ne 0 -and $_.CollectionName -eq $UpdateCollection }
     if ([string]::IsNullOrEmpty($updatevm)) {
-        Write-Host "Update machine not found or its not in maintenance mode. Please check $UpdateCollection collection and create new machine or assign disk to an available machine" -ForegroundColor Red
-        Exit
+        Throw "Update machine not found or its not in maintenance mode. Please check $UpdateCollection collection and create new machine or assign disk to an available machine"
     }
 }
 #check against site
-elseif ([string]::IsNullOrEmpty($updatemachine) -and (![string]::IsNullOrEmpty($UpdateCollection)) ) {
+elseif ([string]::IsNullOrEmpty($updatemachine) -and ([string]::IsNullOrEmpty($UpdateCollection)) ) {
     $updatevm = Citrix.PVS.SnapIn\Get-PvsDeviceInfo | Where-Object { $_.DiskLocatorName -eq $($($disklocator.StoreName) + "\" + $($disklocator.DiskLocatorName)) -and $_.Type -ne 0 }
     if ([string]::IsNullOrEmpty($updatevm)) {
-        Write-Host "Update machine not found in PVS Site or its not in maintenance mode. Please check machine setting to ensure its in Maintenance mode or create new machine or assign disk to an available machine" -ForegroundColor Red
-        Exit
+        Throw "Update machine not found in PVS Site or its not in maintenance mode. Please check machine setting to ensure its in Maintenance mode or create new machine or assign disk to an available machine"
     }
 }
 #use specified update machine
 else {
     $updatevm = Citrix.PVS.SnapIn\Get-PvsDeviceInfo -DeviceName $updatemachine
     if ($updatevm.Type -eq 0) {
-        write-host "Update VM is not in maintenance mode. Please verify configuration." -ForegroundColor Red
-        Exit
+        Throw "Update VM is not in maintenance mode. Please verify configuration."
     }
 }
 
@@ -133,12 +143,12 @@ if ($updatevm.Count -gt 1) {
 }
 
 if ($updatevm.Type -ne 2) {
-    Write-Host $updatevm.Name "is not configured for maintenance mode. Please check the VM under $UpdateCollection collection" -ForegroundColor Red
-    Exit
+    Throw "$($updatevm.Nam) is not configured for maintenance mode. Please check the VM under $UpdateCollection collection"
+
 }
 if ($updatevm.Active -eq "True") {
-    Write-Host $updatevm.Name $updatevm.Ip "is powered on. That is not expected. Machine may be in use. Please check the VM and re run the script" -ForegroundColor Red
-    Exit
+    Throw "$($updatevm.Name) $($updatevm.Ip) is powered on. That is not expected. Machine may be in use. Please check the VM and re run the script"
+
 }
 
 #create new version
@@ -161,8 +171,7 @@ $timer = [Diagnostics.Stopwatch]::StartNew()
 while ((Citrix.PVS.SnapIn\Get-PvsDeviceInfo -DeviceName $updatevm.Name).Ip.IPAddressToString -eq '0.0.0.0') {
     ## If the timer has waited greater than or equal to the timeout, throw an exception exiting the loop
     if ($timer.Elapsed.TotalSeconds -ge $BootTimeout) {
-        write-host "Timeout exceeded. Giving up on booting $updatevm.Name. Please check manually" -ForegroundColor Red
-        Exit
+        Throw "Timeout exceeded. Giving up on booting $updatevm.Name. Please check manually"
     }
     ## Stop the loop every $CheckEvery seconds
     Start-Sleep -Seconds $CheckEvery >$null

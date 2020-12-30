@@ -4,9 +4,10 @@
 .DESCRIPTION
    This script checks if the update machine is powered off, shuts it down if needed, promotes maintenance version to production, and optionally launches Scheduled Task to
    synchronize PVS servers. The script can be ran interactively without providing paramaters.
-   Configuration XML file - InteractivePVSConfig.xml is required for this automation to work. Please specify the file path below the Param block.
+   Configuration XML file - InteractivePVSConfig.xml is required for this automation to work. Please specify the file path in the Param block under configpath or during execution.
+   If the XML path is not specified at that time, the script will attempt to use InteractivePVSConfig.xml file in the same location as the script.
 .EXAMPLE
-    .\Promote-PVSDiskUpdateVersion.ps1 -pvsStoreName "MyStore" -pvsDiskName "myDisk2020"
+    .\Promote-PVSDiskUpdateVersion.ps1 -pvsStoreName "MyStore" -pvsDiskName "myDisk2020" -configpath "c:\automation\InteractivePVSConfig.xml"
 .NOTES
     If script will not be ran in admin context, make sure Scheduled task has permissions to be executed by users. C:\Windows\System32\Tasks
     At this time Scheduled Task works only if it exists on the same machine that runs this script.
@@ -18,12 +19,25 @@
 
 Param(
     [string]$pvsStoreName,
-    [string]$pvsDiskName
+    [string]$pvsDiskName,
+    $configpath
 )
 
 
 #Configuration File Path
-[xml]$ConfigFile = Get-Content "C:\automation\InteractivePVSConfig.xml"
+#use the same path as the script if config is not specified
+if ([string]::IsNullOrEmpty($configpath)) {
+    #determine script location
+    $myDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $ScriptName = $MyInvocation.MyCommand.Name
+
+    #determine xml file name and location
+    $xmlName = [io.path]::GetFileNameWithoutExtension($ScriptName)
+    [xml]$ConfigFile = Get-Content "$myDir\InteractivePVSConfig.xml"
+}
+else {
+    [xml]$ConfigFile = Get-Content $configpath
+}
 
 
 
@@ -101,8 +115,7 @@ foreach ($version in $diskversions) {
     }
 }
 If ([string]::IsNullOrEmpty($updateversion)) {
-    Write-Host "Writable version not found please verify the selected disk" -ForegroundColor Red
-    Exit
+    Throw "Writable version not found please verify the selected disk"
 }
 
 
@@ -126,8 +139,7 @@ if ($updateversion.DeviceCount -gt 0) {
         $updateversion = Citrix.PVS.SnapIn\Get-PvsDiskVersion -DiskLocatorId $updateDiskLocatorID | Where-Object { $_.Access -eq 1 }
         ## If the timer has waited greater than or equal to the timeout, throw an exception exiting the loop
         if ($timer.Elapsed.TotalSeconds -ge $ShutdownTimeout) {
-            write-host "Timeout exceeded. Giving up on stopping $updateMachine. Please check manually" -ForegroundColor Red
-            Exit
+            Throw "Timeout exceeded. Giving up on stopping $updateMachine. Please check manually"
         }
         ## Stop the loop every $CheckEvery seconds
         Start-Sleep -Seconds $CheckEvery >$null
@@ -154,8 +166,7 @@ If ($PVSScheduledTaskExists -eq "True") {
     while ((Get-ScheduledTask -TaskName $syncTaskName).State -ne 'Ready') {
         ## If the timer has waited greater than or equal to the timeout, throw an exception exiting the loop
         if ($timer.Elapsed.TotalSeconds -ge $SyncTimeout) {
-            write-host "Timeout exceeded. Giving up on syncing version. Please check manually" -ForegroundColor Red
-            Exit
+            Throw "Timeout exceeded. Giving up on syncing version. Please check manually"
         }
         ## Stop the loop every $CheckEvery seconds
         Start-Sleep -Seconds $CheckEvery >$null
@@ -176,9 +187,7 @@ If ($PVSScheduledTaskExists -eq "True") {
         }
     }
     If (![string]::IsNullOrEmpty($problemversions)) {
-        Write-Host "`nWritable version not found please verify the selected disk:" -ForegroundColor Red
-        $problemversions.name
-        Exit
+        Throw "Writable version not found please verify the selected disk: $($problemversions.name)"
     }
     Elseif ([string]::IsNullOrEmpty($problemversions)) {
         Write-Host "`nAll versions are in sync and not in maintenance" -ForegroundColor Green
