@@ -84,7 +84,7 @@ function Wait-RebootMaintenance ($AdminAddress, $DesktopGroupName, $machines, $r
     while ($machines.count -gt 0) {
         write-host $machines.count "machines remaining. machines are `n$machines `n" -ForegroundColor Yellow
         #logoff disconnected sessions
-        if ($LogoffDisconnected -eq "True" -and (Get-BrokerSession | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" })) {
+        if ($LogoffDisconnected -and (Get-BrokerSession | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" })) {
             Write-Host "Logging off disconnected sessions" -ForegroundColor Yellow
             Get-BrokerSession -AdminAddress $AdminAddress | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" } | Stop-BrokerSession
             start-sleep $DisconnectWait
@@ -121,7 +121,7 @@ function Wait-RebootMaintenance ($AdminAddress, $DesktopGroupName, $machines, $r
 write-host "`nBatches of $placeinmaintcount machines will be placed in maintenance at one time `n" -ForegroundColor Yellow
 
 #logoff disconnected sessions
-if ($LogoffDisconnected -eq "True" -and (Get-BrokerSession -AdminAddress $AdminAddress | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" })) {
+if ($LogoffDisconnected -and (Get-BrokerSession -AdminAddress $AdminAddress | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" })) {
     Write-Host "Logging off disconnected sessions" -ForegroundColor Yellow
     Get-BrokerSession -AdminAddress $AdminAddress | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" } | Stop-BrokerSession
     Start-Sleep $DisconnectWait
