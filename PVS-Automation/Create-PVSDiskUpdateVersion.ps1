@@ -5,6 +5,7 @@
    This script creates maintenance version of a PVS disk and boots dedicated image build machine returning the IP address of that VM.
    Configuration XML file - InteractivePVSConfig.xml is required for this automation to work. Please specify the file path in the Param block under configpath or during execution.
    If the XML path is not specified at that time, the script will attempt to use InteractivePVSConfig.xml file in the same location as the script.
+    After configuring paramaters in the XML example file, be sure to rename it to InteractivePVSConfig.xml!
    The script can be ran interactively without parameters.
 .EXAMPLE
     .\Create-PVSDiskUpdateVersion.ps1 -pvsStoreName "MyStore" -pvsDiskName "myDisk2020" -updatemachine myUpdatemachine -configpath "c:\automation\InteractivePVSConfig.xml"

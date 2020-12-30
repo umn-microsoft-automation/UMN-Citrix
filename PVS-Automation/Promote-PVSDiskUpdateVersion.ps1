@@ -5,6 +5,7 @@
    This script checks if the update machine is powered off, shuts it down if needed, promotes maintenance version to production, and optionally launches Scheduled Task to
    synchronize PVS servers. The script can be ran interactively without providing paramaters.
    Configuration XML file - InteractivePVSConfig.xml is required for this automation to work. Please specify the file path in the Param block under configpath or during execution.
+   After configuring paramaters in the XML example file, be sure to rename it to InteractivePVSConfig.xml!
    If the XML path is not specified at that time, the script will attempt to use InteractivePVSConfig.xml file in the same location as the script.
 .EXAMPLE
     .\Promote-PVSDiskUpdateVersion.ps1 -pvsStoreName "MyStore" -pvsDiskName "myDisk2020" -configpath "c:\automation\InteractivePVSConfig.xml"
