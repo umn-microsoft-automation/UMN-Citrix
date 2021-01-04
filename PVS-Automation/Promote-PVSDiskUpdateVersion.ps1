@@ -30,11 +30,9 @@ Param(
 if ([string]::IsNullOrEmpty($configpath)) {
     #determine script location
     $myDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-    $ScriptName = $MyInvocation.MyCommand.Name
 
     #determine xml file name and location
-    $xmlName = [io.path]::GetFileNameWithoutExtension($ScriptName)
-    [xml]$ConfigFile = Get-Content "$myDir\InteractivePVSConfig.xml"
+    [xml]$ConfigFile = Get-Content "$myDir\InteractivePVSConfig.xml" -ErrorAction Stop
 }
 else {
     [xml]$ConfigFile = Get-Content $configpath
