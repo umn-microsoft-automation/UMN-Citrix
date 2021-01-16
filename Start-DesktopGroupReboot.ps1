@@ -56,7 +56,7 @@ Add-PSSnapIn citrix*
 
 #Verify Delivery Controller value exists
 if ([string]::IsNullOrEmpty($adminaddress)) {
-    write-host "Delivery Controller name is not specified. Please specify as a script paramater or add value to the param block in the script. Exiting." -ForegroundColor Red
+    $AdminAddress = Read-Host "Press the FQDN of the Delivery Controller"
     exit
 }
 
@@ -70,6 +70,17 @@ if ([string]::IsNullOrEmpty($DesktopGroupName) -or (!(Get-BrokerDesktopGroup -Na
     }
 
     [int]$number = Read-Host "Press the number to select store"
+    while ($number -lt 1 -or $number -gt $DesktopGroups.Count) {
+        if ($retrycount -lt 3) {
+            Write-Host "Invalid input. Please select Desktop Group from the list" -ForegroundColor Red
+            For ($i = 0; $i -lt $DesktopGroups.Count; $i++) {
+                Write-Host "$($i+1): $($DesktopGroups[$i].Name)"
+            }
+            $retrycount += 1
+            [int]$number = Read-Host "Press the number to select store"
+        }
+        else { throw "Invalid Desktop Group selection. Exiting" }
+    }
     $DesktopGroupName = $DesktopGroups[$number - 1].Name
 }
 
@@ -79,6 +90,8 @@ if ([string]::IsNullOrEmpty($DesktopGroupName) -or (!(Get-BrokerDesktopGroup -Na
 function Wait-RebootMaintenance ($AdminAddress, $DesktopGroupName, $machines, $retryinterval, $waitforregisterinterval, $LogoffDisconnected, $DisconnectWait) {
     #main
     write-host "Working on rebooting $machines" -ForegroundColor Yellow
+    #get timestampt for reboot verification
+    $timestamp = get-date
     #while there are machines that are in maintenance mode
     $verifymachines = $machines
     while ($machines.count -gt 0) {
@@ -104,9 +117,16 @@ function Wait-RebootMaintenance ($AdminAddress, $DesktopGroupName, $machines, $r
     }
     #verify that machines registered
     Start-Sleep $waitforregisterinterval
+    $failedmachines = @()
     foreach ($machine in $verifymachines) {
-        if ((Get-BrokerMachine -AdminAddress $AdminAddress -MachineName $machine).RegistrationState -ne "Registered") { Throw "One or more of rebooted machines did not register. Stopping" }
+        if ((Get-BrokerMachine -AdminAddress $AdminAddress -MachineName $machine.MachineName).RegistrationState -ne "Registered" -and (Get-BrokerMachine -AdminAddress $AdminAddress -MachineName $machine.MachineName).LastDeregistrationTime -lt $timestamp) {
+            $failedmachines += $machine.machinename
+        }
     }
+    if (!([string]::IsNullOrEmpty($failedmachines))) {
+        Throw "The following machines did not reboot. `n`n$failedmachines `n`nStopping"
+    }
+
     write-host "ending the batch" -foregroundcolor green
 }
 
