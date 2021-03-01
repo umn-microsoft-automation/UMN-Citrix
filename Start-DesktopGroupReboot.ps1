@@ -38,7 +38,7 @@ Param (
     [Parameter(Mandatory = $true)]
     [int]$PercentToRemain,
     #Delivery Controller FQDN
-    $AdminAddress,
+    $AdminAddress = "oit-adi-ddc12a.ad.umn.edu",
     #Time it takes for machines to reboot and register
     [int]$WaitForRegisterInterval = 120,
     #Retry interval seconds between session count checks
@@ -89,17 +89,17 @@ if ([string]::IsNullOrEmpty($DesktopGroupName) -or (!(Get-BrokerDesktopGroup -Na
 
 function Wait-RebootMaintenance ($AdminAddress, $DesktopGroupName, $machines, $retryinterval, $waitforregisterinterval, $LogoffDisconnected, $DisconnectWait) {
     #main
-    write-host "Working on rebooting $machines" -ForegroundColor Yellow
     #get timestampt for reboot verification
     $timestamp = get-date
     #while there are machines that are in maintenance mode
     $verifymachines = $machines
+    Write-Host "machines to verify" $verifymachines
     while ($machines.count -gt 0) {
         write-host $machines.count "machines remaining. machines are `n$machines `n" -ForegroundColor Yellow
         #logoff disconnected sessions
-        if ($LogoffDisconnected -and (Get-BrokerSession | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" })) {
+        if ($LogoffDisconnected -and (Get-BrokerSession | where { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" })) {
             Write-Host "Logging off disconnected sessions" -ForegroundColor Yellow
-            Get-BrokerSession -AdminAddress $AdminAddress | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" } | Stop-BrokerSession
+            Get-BrokerSession -AdminAddress $AdminAddress | where { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" } | Stop-BrokerSession
             start-sleep $DisconnectWait
         }
         #for each machine check if session count is less then one
@@ -119,7 +119,7 @@ function Wait-RebootMaintenance ($AdminAddress, $DesktopGroupName, $machines, $r
     Start-Sleep $waitforregisterinterval
     $failedmachines = @()
     foreach ($machine in $verifymachines) {
-        if ((Get-BrokerMachine -AdminAddress $AdminAddress -MachineName $machine.MachineName).RegistrationState -ne "Registered" -and (Get-BrokerMachine -AdminAddress $AdminAddress -MachineName $machine.MachineName).LastDeregistrationTime -lt $timestamp) {
+        if ((Get-BrokerMachine -AdminAddress $AdminAddress -MachineName $machine).RegistrationState -ne "Registered" -and (Get-BrokerMachine -AdminAddress $AdminAddress -MachineName $machine).LastDeregistrationTime -lt $timestamp) {
             $failedmachines += $machine.machinename
         }
     }
@@ -134,18 +134,6 @@ function Wait-RebootMaintenance ($AdminAddress, $DesktopGroupName, $machines, $r
 
 #Main
 
-#calculate reboot count
-[int]$totalcount = (Get-BrokerMachine -AdminAddress $AdminAddress -MaxRecordCount $maxrecords -DesktopGroupName $desktopgroupname).count
-[int]$machinestoremainup = [System.Math]::Round(($totalcount / 100) * $percenttoremain)
-[int]$placeinmaintcount = $totalcount - $machinestoremainup
-write-host "`nBatches of $placeinmaintcount machines will be placed in maintenance at one time `n" -ForegroundColor Yellow
-
-#logoff disconnected sessions
-if ($LogoffDisconnected -and (Get-BrokerSession -AdminAddress $AdminAddress | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" })) {
-    Write-Host "Logging off disconnected sessions" -ForegroundColor Yellow
-    Get-BrokerSession -AdminAddress $AdminAddress | Where-Object { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" } | Stop-BrokerSession
-    Start-Sleep $DisconnectWait
-}
 #get machines with zero sessions first and reboot
 $zerosessionmachines = Get-BrokerMachine -AdminAddress $AdminAddress -MaxRecordCount $maxrecords -DesktopGroupName $desktopgroupname | Where-Object { $_.SessionCount -lt 1 }
 
@@ -167,6 +155,18 @@ else {
     $allmachines = (Get-BrokerMachine -AdminAddress $AdminAddress -MaxRecordCount $maxrecords -DesktopGroupName $desktopgroupname).MachineName
 }
 
+#calculate reboot count
+[int]$totalcount = (Get-BrokerMachine -AdminAddress $AdminAddress -MaxRecordCount $maxrecords -DesktopGroupName $desktopgroupname).count
+[int]$machinestoremainup = [System.Math]::Round(($totalcount / 100) * $percenttoremain)
+[int]$placeinmaintcount = $totalcount - $machinestoremainup
+write-host "`nBatches of $placeinmaintcount machines will be placed in maintenance at one time `n" -ForegroundColor Yellow
+
+#logoff disconnected sessions
+if ($LogoffDisconnected -and (Get-BrokerSession -AdminAddress $AdminAddress | where { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" })) {
+    Write-Host "Logging off disconnected sessions" -ForegroundColor Yellow
+    Get-BrokerSession -AdminAddress $AdminAddress | where { $_.DesktopGroupName -eq $DesktopGroupName -and $_.SessionState -eq "Disconnected" } | Stop-BrokerSession
+    Start-Sleep $DisconnectWait
+}
 
 #Cycle through remaining machines in specified batches
 while ($allmachines.count -gt 0) {
